@@ -76,8 +76,8 @@ infos.forEach((c,i)=>{
 });
 
 /* ════════ SUPABASE CONFIG ════════ */
-const SB_URL  = 'YOUR_SUPABASE_URL';
-const SB_KEY  = 'YOUR_SUPABASE_ANON_KEY';
+const SB_URL  = 'https://jmqqfsymvpktynabvgmu.supabase.co';
+const SB_KEY  = 'sb_publishable_dCgDbN7j4CPGy3GfXVL1Eg_xLC1x3Et';
 let _sb=null;
 try{_sb=window.supabase.createClient(SB_URL,SB_KEY);}catch(e){}
 
