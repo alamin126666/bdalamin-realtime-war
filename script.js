@@ -323,210 +323,21 @@ setInterval(updatePeriod,1000);
 
 
 /* ═══════════════════════════════════════════════════════════
-   PREDICTION ENGINE — 3-NUMBER LOGIC + 300+ COMBOS
-   Format: "n1:n2:n3" => prediction
+   RANDOM PREDICTION ENGINE
 ═══════════════════════════════════════════════════════════ */
 
 function bs(n){return n>=5?'BIG':'SMALL';}
 function colorOf(n){if(n===0||n===5)return n===0?'RED':'GREEN';return n%2===0?'RED':'GREEN';}
 
-/* ── 3-number lookup table (all 1000 combos) ── */
-function build3Map(){
-  const M={};
-  // Pattern rules used to generate all 1000 entries
-  const out=['SMALL','SMALL','SMALL','BIG','SMALL','GREEN','BIG','BIG','SMALL','GREEN']; // n=0..9 base
-  for(let a=0;a<=9;a++) for(let b=0;b<=9;b++) for(let c=0;c<=9;c++){
-    const key=`${a}:${b}:${c}`;
-    const sum=a+b+c;
-    // Primary: sum-based
-    if(sum<=13) M[key]= sum%2===0?'SMALL':'BIG';
-    else        M[key]= sum%2===0?'BIG':'SMALL';
-
-    // Override with specific pattern rules
-    // Zigzag: alternating big/small
-    const abZig=(bs(a)!==bs(b));
-    const bcZig=(bs(b)!==bs(c));
-    if(abZig&&bcZig){ M[key]=bs(a)==='BIG'?'SMALL':'BIG'; }
-
-    // Triple same
-    if(a===b&&b===c){
-      M[key]=a<=4?'BIG':'SMALL';
-    }
-
-    // Double then different
-    if(a===b&&b!==c){ M[key]=bs(c)==='BIG'?'SMALL':'BIG'; }
-    if(b===c&&a!==b){ M[key]=bs(a); }
-
-    // Ascending streak
-    if(b===a+1&&c===b+1){ M[key]=c>=5?'SMALL':'BIG'; }
-
-    // Descending streak
-    if(b===a-1&&c===b-1){ M[key]=c<=4?'BIG':'SMALL'; }
-
-    // Color-based
-    const aC=colorOf(a),bC=colorOf(b),cC=colorOf(c);
-    if(aC==='GREEN'&&bC==='GREEN'){ M[key]='BIG'; }
-    if(aC==='RED'&&bC==='RED'&&cC==='RED'){ M[key]='SMALL'; }
-
-    // Cross-boundary (one side of 5)
-    if(a<5&&b<5&&c>=5){ M[key]='BIG'; }
-    if(a>=5&&b>=5&&c<5){ M[key]='SMALL'; }
-
-    // Specific high-confidence manual overrides
-    // 0,0,0 => SMALL  | 0,0,1 => BIG  etc
-    const fixed={
-      '0:0:0':'SMALL','0:0:1':'BIG','0:1:1':'SMALL','1:1:0':'BIG',
-      '0:0:5':'GREEN','5:5:0':'GREEN','5:0:5':'BIG',
-      '9:9:9':'BIG','9:8:7':'SMALL','7:8:9':'BIG',
-      '0:5:0':'GREEN','5:0:0':'BIG','0:0:9':'SMALL',
-      '1:2:3':'BIG','3:2:1':'SMALL','4:5:6':'BIG','6:5:4':'SMALL',
-      '2:4:6':'BIG','1:3:5':'SMALL','5:3:1':'BIG','6:4:2':'SMALL',
-      '9:0:9':'SMALL','0:9:0':'BIG','8:8:8':'BIG','2:2:2':'SMALL',
-      '4:4:4':'BIG','6:6:6':'SMALL','3:3:3':'BIG','7:7:7':'SMALL',
-      '1:1:1':'SMALL','5:5:5':'GREEN','0:1:2':'BIG','2:1:0':'SMALL',
-      '7:5:3':'SMALL','3:5:7':'BIG','8:6:4':'SMALL','4:6:8':'BIG',
-      '9:7:5':'SMALL','5:7:9':'BIG','1:4:7':'BIG','7:4:1':'SMALL',
-      '2:5:8':'BIG','8:5:2':'SMALL','0:3:6':'SMALL','6:3:0':'BIG',
-      '1:5:9':'BIG','9:5:1':'SMALL','0:4:8':'BIG','8:4:0':'SMALL',
-    };
-    if(fixed[key]) M[key]=fixed[key];
-  }
-  return M;
-}
-const PRED3=build3Map();
-
-/* ── Additional pattern detectors ── */
-function detectPattern(h){
-  // h = array of {number,issueNumber,...} newest first
-  const n=h.map(x=>+x.number);
-  if(n.length<3)return null;
-
-  // Momentum: last 3 same BS direction => continue
-  const bArr=n.slice(0,5).map(x=>bs(x));
-  if(bArr[0]===bArr[1]&&bArr[1]===bArr[2]){
-    // strong streak — predict opposite (reversal)
-    return{type:'REVERSAL',value:bArr[0]==='BIG'?'SMALL':'BIG'};
-  }
-
-  // Alternating pattern 5+ times
-  let altCount=0;
-  for(let i=0;i<Math.min(6,bArr.length-1);i++){
-    if(bArr[i]!==bArr[i+1])altCount++;
-    else break;
-  }
-  if(altCount>=4){return{type:'ZIGZAG',value:bArr[0]==='BIG'?'SMALL':'BIG'};}
-
-  // Color run
-  const cArr=n.slice(0,4).map(x=>colorOf(x));
-  if(cArr[0]===cArr[1]&&cArr[1]===cArr[2]&&cArr[0]!=='GREEN'){
-    return{type:'COLOR_BREAK',value:cArr[0]==='RED'?'BIG':'SMALL'};
-  }
-
-  // 0 or 5 special
-  if(n[0]===0)return{type:'ZERO',value:'BIG'};
-  if(n[0]===5)return{type:'FIVE',value:'GREEN'};
-  if(n[1]===0&&n[2]===0)return{type:'DOUBLE_ZERO',value:'SMALL'};
-
-  // High-low swing
-  if(n[0]>=8&&n[1]<=2&&n[2]>=8)return{type:'SWING',value:'SMALL'};
-  if(n[0]<=2&&n[1]>=8&&n[2]<=2)return{type:'SWING',value:'BIG'};
-
-  // Increasing trend
-  if(n[0]>n[1]&&n[1]>n[2]&&n[2]>n[3])return{type:'DOWN_TREND',value:'BIG'};
-  if(n[0]<n[1]&&n[1]<n[2]&&n[2]<n[3])return{type:'UP_TREND',value:'SMALL'};
-
-  return null;
-}
-
-/* ── RECOVERY LOGIC: Period last-3-digits × Market last-2 ── */
-function recoveryLogic(periodStr, marketHistory){
-  // Period last 3 digits
-  const pStr=String(periodStr);
-  const d1=+pStr[pStr.length-3]||0;
-  const d2=+pStr[pStr.length-2]||0;
-  const d3=+pStr[pStr.length-1]||0;
-  const periodSum=d1+d2+d3;
-
-  // Market last 2 numbers
-  const m1=+marketHistory[0]?.number||0;
-  const m2=+marketHistory[1]?.number||0;
-  const marketSum=m1+m2;
-
-  if(marketSum===0)return null; // avoid divide
-  const product=(periodSum*marketSum)%100;
-  const lastDigit=product%10;
-
-  // 0,5 = special; <5 = SMALL; >=5 = BIG
-  if(lastDigit===0)return'SMALL';
-  if(lastDigit===5)return'BIG';
-  return lastDigit<5?'SMALL':'BIG';
-}
-
-/* ── MAIN PREDICT ── */
+/* ── MAIN PREDICT — random math (0.3 threshold) ── */
 function predictNext(history, nextPeriod){
-  if(history.length<3)return null;
-  const n1=+history[0].number, n2=+history[1].number, n3=+history[2].number;
-
-  if(STATE.recovery){
-    // Recovery mode: use both pattern detector + period-math logic
-    const patPred=detectPattern(history);
-    const recPred=recoveryLogic(nextPeriod, history);
-
-    if(patPred&&recPred){
-      // Both agree => high confidence
-      if(patPred.value===recPred){
-        return{type:'RECOVERY_CONFIRMED',value:recPred};
-      } else {
-        // Disagree => skip (return null = no signal)
-        return null;
-      }
-    }
-    // Only one available
-    if(recPred) return{type:'RECOVERY_MATH',value:recPred};
-    if(patPred) return{type:patPred.type,value:patPred.value};
-    return null;
-  }
-
-  // Normal mode: 3-number lookup first
-  const key=`${n1}:${n2}:${n3}`;
-  const mapVal=PRED3[key];
-
-  // Cross-check with pattern
-  const patPred=detectPattern(history);
-
-  if(mapVal&&patPred){
-    // Both agree => confident signal
-    if(mapVal===patPred.value){
-      return{type:'CONFIRMED_3NUM',value:mapVal};
-    }
-    // Disagree => use pattern (more dynamic)
-    return{type:patPred.type,value:patPred.value};
-  }
-
-  if(mapVal) return{type:'3NUM_LOGIC',value:mapVal};
-  if(patPred) return{type:patPred.type,value:patPred.value};
-
-  // Fallback: simple BS of latest
-  return{type:'TREND',value:bs(n1)};
+  const value=Math.random()<0.3?'BIG':'SMALL';
+  return{type:'RANDOM',value};
 }
 
 /* badge label map */
 const TYPE_LABELS={
-  'CONFIRMED_3NUM':'✦ CONFIRMED SIGNAL',
-  '3NUM_LOGIC':'3-NUM PATTERN',
-  'RECOVERY_CONFIRMED':'✦ RECOVERY CONFIRMED',
-  'RECOVERY_MATH':'RECOVERY MATH',
-  'REVERSAL':'REVERSAL PATTERN',
-  'ZIGZAG':'ZIGZAG PATTERN',
-  'COLOR_BREAK':'COLOR BREAK',
-  'ZERO':'ZERO SIGNAL',
-  'FIVE':'FIVE SIGNAL',
-  'DOUBLE_ZERO':'DOUBLE ZERO',
-  'SWING':'SWING PATTERN',
-  'DOWN_TREND':'DOWN TREND',
-  'UP_TREND':'UP TREND',
-  'TREND':'TREND LOGIC',
-  'PATTERN':'RECOVERY PATTERN',
+  'RANDOM':'',
 };
 
 /* ════════ API + ENGINE ════════ */
@@ -668,24 +479,15 @@ async function engineTick(){
           STATE.lastPredPeriod=nextP;
           const pred=predictNext(list,nextP);
 
-          if(pred===null){
-            // Recovery skip — signals disagree, record as SKIP
-            STATE.signals.push({period:nextP,prediction:'SKIP',type:'RECOVERY_SKIP',status:'SKIP'});
-            $('predVal').className='pred-val WAIT';
-            $('predVal').textContent='WAIT';
-            $('predMeta').textContent='Analyzing '+nextP;
-            $('predTypeBadge').textContent='⏸ RECOVERY ANALYSIS — WAITING';
-          } else {
-            STATE.signals.push({period:nextP,prediction:pred.value,type:pred.type,status:'PENDING'});
-            $('predVal').className='pred-val '+pred.value;
-            $('predVal').textContent=pred.value;
-            $('predMeta').textContent=nextP;
-            $('predTypeBadge').textContent=TYPE_LABELS[pred.type]||pred.type;
-            // Flash animation on new signal
-            const pv=$('predVal');
-            pv.style.transform='scale(1.18)';
-            setTimeout(()=>pv.style.transform='',350);
-          }
+          STATE.signals.push({period:nextP,prediction:pred.value,type:pred.type,status:'PENDING'});
+          $('predVal').className='pred-val '+pred.value;
+          $('predVal').textContent=pred.value;
+          $('predMeta').textContent=nextP;
+          $('predTypeBadge').textContent=TYPE_LABELS[pred.type]||pred.type;
+          // Flash animation on new signal
+          const pv=$('predVal');
+          pv.style.transform='scale(1.18)';
+          setTimeout(()=>pv.style.transform='',350);
         }
       }
     }
